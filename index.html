@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8">
+    <meta name="viewport" content="width=500;initial-scale=1.0;maximum-scale=1.0;user-scalable=0;">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>iframe vml canvas png</title>
+    <script type="text/javascript" src="magic_graphics.js"></script>
+    <script type="text/javascript" src="vendor/persist-min.js"></script>
+    <script type="text/javascript" src="orbit_bandit.js"></script>
+    <script type="text/javascript">
+      var on_load = function(){
+        magic_graphics('canvas',14,OrbitBanditScene,function(engine){
+          engine.start();
+        });
+      }
+    </script>
+    <style type="text/css">
+      body,html {
+        background-color:#515151;
+        margin:0;
+        padding:0;
+        overflow:hidden;
+        font-family:Lucida Grande;
+        color:#22C0FF;
+        text-shadow:0 -1px 1px #001C8F;
+        letter-spacing:1px;
+      }
+      #canvas {
+        width:480px;
+        height:320px;
+        margin:0 auto;
+      }
+    </style>
+  </head>
+  <body onload="on_load()">
+    <div id="main-wrapper">
+      <div id="canvas"></div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,257 @@
+<html xmlns:magic_graphics="urn:schemas-microsoft-com:vml">
+  <head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8">
+    <title>vml</title>
+    <script type="text/javascript" src="mg_util.js"></script>
+    <script type="text/javascript">
+/***
+## VMLGraphics(bind_elem_id,fps)
+
+bind_elem_id - string, element to add canvas element to
+
+fps - number, frames per second to call update at
+
+provides a drawing engine for vml, along with mouse event support
+***/
+      var VMLGraphics = function(bind_elem_id,fps,event_base){
+        var self = event_base,
+            interval;
+/***
+#### namespace
+
+string, namespace for vml elements, must match xmlns and style declarations in the html
+***/
+        self.namespace = 'magic_graphics';
+/***
+#### bind_to_elem(elem_id)
+
+elem_id - string, element id to add canvas element to
+
+adds vml group element to DOM, setting it's height and width also
+***/
+        var bind_to_elem = function(bind_elem_id){
+          var bind_elem = document.getElementById(bind_elem_id),
+              vml_elem = document.createElement(self.namespace + ':group'),
+              width = bind_elem.offsetWidth,
+              height = bind_elem.offsetHeight;
+          vml_elem.style.width = width + 'px';
+          vml_elem.style.height = height + 'px';
+          vml_elem.setAttribute('coordsize',width + ' ' + height);
+          bind_elem.innerHTML = '';
+          bind_elem.appendChild(vml_elem);
+          return vml_elem;
+        };
+        var context = bind_to_elem(bind_elem_id),
+            displayables = [],
+            lookup = {},
+            queue = {};
+/***
+#### width
+
+number, width of the canvas
+***/
+        self.width = parseFloat(context.style.width);
+/***
+#### height
+
+number, height of the canvas
+***/
+        self.height = parseFloat(context.style.height);
+/***
+#### adjust_displayable(displayable,properties)
+
+displayable - object, displayable object to update
+
+properties - object, new properties to update in displayable
+
+this acts as the primary interface for updating displayable objects, do not update their properties directly and expect it to work cross browser
+***/
+        self.adjust_displayable = function(displayable,properties){
+          for(var o in properties){
+            if(displayable.style[o]) displayable.style[o] = properties[o]; // because displayaobjects have their style properties defined already, cehck them first
+            else displayable[o] = properties[o];
+          };
+          var index = lookup[displayable.$$id],
+              shape = displayables[index];
+          if(shape === undefined) return;
+          var displayable_id = displayable.$$id;
+          if(queue[displayable_id] === undefined) queue[displayable_id] = displayable;
+          queue[displayable_id]['shape'] = shape;
+          queue[displayable_id]['displayable'] = displayable;
+          if(properties['x']) queue[displayable_id]['x'] = properties['x'];
+          if(properties['y']) queue[displayable_id]['y'] = properties['y'];
+          if(properties['vertices']) queue[displayable_id]['vertices'] = properties['vertices'];
+          if(properties['border-color']) queue[displayable_id]['border-color'] = properties['border-color'];
+          if(properties['border-width']) queue[displayable_id]['border-width'] = properties['border-width'];
+          if(properties['background-color']) queue[displayable_id]['background-color'] = properties['background-color'];
+        };
+/***
+#### remove(displayable)
+
+displayable - object, displayable object to remove
+
+removes a displayable object from the canvas
+***/
+        self.remove = function(displayable){
+          var index = lookup[displayable.$$id],
+              shape = displayables[index];
+          shape.parentNode.removeChild(shape);
+        };
+        self.destroy = function(){
+          self.clear_bindings();
+          for(var displayable in lookup){
+            var index = lookup[displayable.$$id];
+            displayables[index] = undefined;
+            delete lookup[displayable];
+          };
+        };
+/***
+#### add(displayable)
+
+displayable - object, displayable object to add
+
+adds a displayable object to the canvas
+***/
+        self.add = function(displayable){
+          var shape = document.createElement(self.namespace + ':shape');
+          draw_displayable(displayable,shape);
+          shape.setAttribute("coordorigin","0 0");
+          fill_displayable(displayable,shape);
+          outline_displayable(displayable,shape);
+          shape.style.position = 'absolute';
+          shape.style.left = displayable.x + 'px';
+          shape.style.top = displayable.y + 'px';
+          context.appendChild(shape);
+          // add shape to displayables_lookup, indexed under displayable.$$id
+          var index = displayables.length;
+          displayables[index] = shape;
+          lookup[displayable.$$id] = index;
+        };
+/***
+#### update
+
+updates objects at an interval
+***/
+        self.update = function(){
+          draw_queue();
+          self.trigger('update');
+        };
+/***
+#### draw_queue
+
+iterates through draw queue and updates objects
+***/
+        var draw_queue = function(){
+          for(var displayable_id in queue){
+            var displayable = queue[displayable_id]['displayable'],
+                shape = queue[displayable_id]['shape'],
+                properties = queue[displayable_id];
+            if(properties['x']) shape.style.left = properties.x + 'px'; // x
+            if(properties['y']) shape.style.top = properties.y + 'px'; // y
+            if(properties['vertices']) draw_displayable(displayable,shape); // vertices
+            if(properties['border-color'] || properties['border-width']) outline_displayable(displayable,shape); // border-color
+            if(properties['background-color']) fill_displayable(displayable,shape); // background-color
+          };
+          queue = {};
+        };
+/***
+#### draw_displayable(displayable,shape)
+
+displayable - object, displayable object to draw
+
+shape - object, vml element on canvas representing the view of this displayable
+
+updates the path of a displayable's shape
+***/
+        var draw_displayable = function(displayable,shape){
+          var path = '',
+              shape_bounds = {'min_x':0,'max_x':self.width,'min_y':0,'max_y':self.height};
+          if(displayable.vertices.length > 0){
+            var vertex,
+                line_tos = [];
+            for(var i = 0, l = displayable.vertices.length; i < l; i++){
+              vertex = displayable.vertices[i];
+              vertex.x = Math.round(vertex.x);
+              vertex.y = Math.round(vertex.y);
+              if(i === 0) path += "M " + vertex.x + "," + vertex.y;
+              else line_tos[line_tos.length] = vertex.x + "," + vertex.y;
+              if(vertex.x < shape_bounds.min_x) shape_bounds.min_x = vertex.x;
+              if(vertex.x > shape_bounds.max_x) shape_bounds.max_x = vertex.x;
+              if(vertex.y < shape_bounds.min_y) shape_bounds.min_y = vertex.y;
+              if(vertex.y > shape_bounds.max_y) shape_bounds.max_y = vertex.y;
+            };
+            path += " L " + line_tos.join(", ") + " X E";
+          };
+          var displayable_width = shape_bounds.max_x - shape_bounds.min_x
+              displayable_height = shape_bounds.max_y - shape_bounds.min_y;
+          if(path !== undefined) shape.setAttribute("path",path);
+          shape.setAttribute("coordsize",displayable_width + " " + displayable_height);
+          shape.style.width = displayable_width;
+          shape.style.height = displayable_height;
+        };
+/***
+#### outline_displayable(displayable,shape)
+
+displayable - object, displayable object to outline
+
+shape - object, vml element on canvas representing the view of this displayable
+
+updates the border-color and border-width of a displayable's shape
+***/
+        var outline_displayable = function(displayable,shape){
+          shape.setAttribute('stroked',displayable.style['border-width'] > 0 ? "true" : "false");
+          if(displayable.style['border-width'] > 0){
+            shape.setAttribute('strokeweight',displayable.style['border-width'] + "px");
+            shape.setAttribute('strokecolor',displayable.style['border-color']);
+          };
+        };
+/***
+#### fill_displayable(displayable,shape)
+
+displayable - object, displayable object to fill
+
+shape - object, vml element on canvas representing the view of this displayable
+
+sets the fill of a displayable's shape
+***/
+        var fill_displayable = function(displayable,shape){
+          shape.setAttribute('filled',displayable.style['background-color'] === 'rgba(0,0,0,0)' ? "false" : "true");
+          shape.setAttribute('fillcolor',displayable.style['background-color']);
+        };
+        return self;
+      };
+/***
+## magic_graphics_engine(fps)
+
+fps - number, frames per second to call update at
+
+returns an instance of the VMLGraphics engine
+***/
+      window.magic_graphics_engine = function(fps,event_base){
+        var canvas_elem = MGUtil('canvas');
+        MGUtil(canvas_elem).bind('mousemove',window.mouse_event);
+        MGUtil(canvas_elem).bind('mousedown',window.mouse_event);
+        MGUtil(canvas_elem).bind('mouseup',window.mouse_event);
+        MGUtil(canvas_elem).bind('mouseover',window.mouse_event);
+        MGUtil(canvas_elem).bind('mouseout',window.mouse_event);
+        var engine = new VMLGraphics('canvas',fps,event_base);
+        return engine;
+      };
+    </script>
+    <style>magic_graphics\: * { behavior: url(#default#VML); display:inline-block; }</style>
+    <style type="text/css">
+      html,body {
+        margin:0;
+        padding:0;
+        overflow:hidden;
+      }
+      #canvas {
+        width:100%;
+        height:100%;
+      }
+    </style>
+  </head>
+  <body onload="on_load()">
+    <div id="canvas"></div>
+  </body>
+</html>

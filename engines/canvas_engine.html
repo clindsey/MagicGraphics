@@ -1,0 +1,191 @@
+<!DOCUMENT html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8">
+    <title>canvas</title>
+    <script type="text/javascript" src="mg_util.js"></script>
+    <script type="text/javascript">
+/***
+## CanvasGraphics(bind_elem_id,fps)
+
+bind_elem_id - string, element to add canvas element to
+
+fps - number, frames per second to call update at
+
+provides a drawing engine for canvas element supporting browsers, along with touch and mouse event support
+***/
+      var CanvasGraphics = function(bind_elem_id,fps,event_base){
+/***
+#### bind_to_elem(elem_id)
+
+elem_id - string, element id to add canvas element to
+
+adds canvas element to DOM, setting it's height and width also
+***/
+        var bind_to_elem = function(elem_id){
+          var bind_elem = document.getElementById(elem_id),
+              canvas_elem = document.createElement('canvas'),
+              width = bind_elem.offsetWidth,
+              height = bind_elem.offsetHeight;
+          canvas_elem.width = width;
+          canvas_elem.height = height;
+          bind_elem.innerHTML = '';
+          bind_elem.appendChild(canvas_elem);
+          return canvas_elem;
+        };
+        var canvas_elem = bind_to_elem(bind_elem_id),
+            context = canvas_elem.getContext('2d'),
+            canvas = context.canvas,
+            width = canvas.width,
+            height = canvas.height,
+            displayables = [],
+            lookup = {},
+            interval,
+            self = event_base;
+/***
+#### update
+
+draws the scene
+***/
+        self.update = function(){
+          draw_all();
+          self.trigger('update');
+        };
+/***
+#### adjust_displayable(displayable,properties)
+
+displayable - object, displayable object to update
+
+properties - object, new properties to update in displayable
+
+this acts as the primary interface for updating displayable objects, do not update their properties directly and expect it to work cross browser
+***/
+        self.adjust_displayable = function(displayable,properties){
+          for(var o in properties){
+            if(displayable.style[o]) displayable.style[o] = properties[o]; // because displayaobjects have their style properties defined already, cehck them first
+            else displayable[o] = properties[o];
+          };
+        };
+/***
+#### remove(displayable)
+
+displayable - object, displayable object to remove
+
+removes a displayable object from the drawing queue
+***/
+        self.remove = function(displayable){
+          var index = lookup[displayable.$$id];
+          delete displayables[index];
+        };
+        self.destroy = function(){
+          self.clear_bindings();
+          for(var displayable in lookup){
+            var index = lookup[displayable.$$id];
+            displayables[index] = undefined;
+            delete lookup[displayable];
+          };
+        };
+/***
+#### add(displayable)
+
+displayable - object, displayable object to add
+
+adds a displayable object to the drawing queue
+***/
+        self.add = function(displayable){
+          //draw_displayable(displayable);
+          // add shape to displayables_lookup, indexed under displayable.$$id
+          var index = displayables.length;
+          displayables[index] = displayable;
+          lookup[displayable.$$id] = index;
+        };
+/***
+#### draw_all
+
+iterates through draw queue and draws objects to canvas
+***/
+        var draw_all = function(){
+          canvas.width = canvas.width
+          for(var i = 0, l = displayables.length; i < l; i++){
+            if(displayables[i] !== undefined) draw_displayable(displayables[i]);
+          };
+        };
+/***
+#### draw_displayable(displayable)
+
+displayable - object, displayable object to draw
+
+draws an individual displayable object
+***/
+        var draw_displayable = function(displayable){
+          context.save();
+          context.translate(displayable.x,displayable.y);
+          if(displayable.style['border-width'] > 0){
+            context.strokeStyle = displayable.style['border-color'];
+            context.lineWidth = displayable.style['border-width'];
+          };
+          context.fillStyle = displayable.style['background-color'];
+          if(displayable.vertices.length > 0){
+            context.beginPath();
+            var vertex;
+            for(var i = 0, l = displayable.vertices.length; i < l; i++){
+              vertex = displayable.vertices[i]
+              if(i === 0) context.moveTo(vertex.x,vertex.y);
+              else context.lineTo(vertex.x,vertex.y);
+            };
+            context.closePath();
+            context.fill();
+            if(displayable.style['border-width'] > 0) context.stroke();
+          };
+          context.restore();
+        };
+/***
+#### width
+
+number, width of the canvas
+***/
+        self.width = width;
+/***
+#### height
+
+number, height of the canvas
+***/
+        self.height = height;
+        return self;
+      };
+/***
+## magic_graphics_engine(fps)
+
+fps - number, frames per second to call update at
+
+returns an instance of the CanvasGraphics engine
+***/
+      window.magic_graphics_engine = function(fps,event_base){
+        var canvas_elem = MGUtil('canvas');
+        MGUtil(canvas_elem).bind('mousemove',window.mouse_event);
+        MGUtil(canvas_elem).bind('mousedown',window.mouse_event);
+        MGUtil(canvas_elem).bind('mouseup',window.mouse_event);
+        MGUtil(canvas_elem).bind('mouseover',window.mouse_event);
+        MGUtil(canvas_elem).bind('mouseout',window.mouse_event);
+        MGUtil(canvas_elem).bind('touchstart',function(e){ e.changedTouches[0].type = 'mousedown'; window.mouse_event(e.changedTouches[0]); e.preventDefault(); });
+        MGUtil(canvas_elem).bind('touchmove',function(e){ e.changedTouches[0].type = 'mousemove'; window.mouse_event(e.changedTouches[0]); e.preventDefault(); });
+        MGUtil(canvas_elem).bind('touchend',function(e){ e.changedTouches[0].type = 'mouseup'; window.mouse_event(e.changedTouches[0]); e.preventDefault(); });
+        var engine = new CanvasGraphics('canvas',fps,event_base);
+        return engine;
+      };
+    </script>
+    <style type="text/css">
+      html,body {
+        margin:0;
+        padding:0;
+      }
+      #canvas {
+        width:100%;
+        height:100%;
+      }
+    </style>
+  </head>
+  <body onload="window.on_load()">
+    <div id="canvas"></div>
+  </body>
+</html>
